@@ -16,18 +16,21 @@ const CONTROLS_HIDE_DELAY = 8000;
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 const canvas       = document.getElementById('canvas');
 const ctx          = canvas.getContext('2d');
-const audio        = document.getElementById('audio');
 const controls     = document.getElementById('controls');
 const trackSelect  = document.getElementById('track-select');
 const playPauseBtn = document.getElementById('play-pause');
 const volumeSlider = document.getElementById('volume');
 
 // ── Audio state ───────────────────────────────────────────────────────────────
-let audioCtx  = null;
-let analyser  = null;
-let gainNode  = null;
-let freqData  = null;
-let isPlaying = false;
+let audioCtx    = null;
+let analyser    = null;
+let gainNode    = null;
+let freqData    = null;
+let isPlaying   = false;
+let bufferSource = null;
+let audioBuffer  = null;
+let startOffset  = 0;
+let startTime    = 0;
 
 // ── Visualizer state ──────────────────────────────────────────────────────────
 let barCount    = NUM_BARS;
@@ -195,7 +198,7 @@ function setupAudio() {
     return;
   }
 
-  audioCtx = new AudioContext();
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = FFT_SIZE;
   analyser.smoothingTimeConstant = 0.8;
@@ -204,10 +207,53 @@ function setupAudio() {
   gainNode = audioCtx.createGain();
   gainNode.gain.value = parseFloat(volumeSlider.value);
 
-  const source = audioCtx.createMediaElementSource(audio);
-  source.connect(analyser);
   analyser.connect(gainNode);
   gainNode.connect(audioCtx.destination);
+}
+
+async function loadAndPlay(url) {
+  setupAudio();
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+
+  // Stop current playback
+  if (bufferSource) {
+    bufferSource.stop();
+    bufferSource = null;
+  }
+
+  playPauseBtn.textContent = 'Loading...';
+
+  try {
+    const response = await fetch(url);
+    const arrayBuf = await response.arrayBuffer();
+    audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+
+    startOffset = 0;
+    playBuffer();
+  } catch (e) {
+    console.error('Failed to load audio:', e);
+    playPauseBtn.textContent = 'Error';
+  }
+}
+
+function playBuffer() {
+  if (!audioBuffer) return;
+  bufferSource = audioCtx.createBufferSource();
+  bufferSource.buffer = audioBuffer;
+  bufferSource.connect(analyser);
+  bufferSource.loop = true;
+  bufferSource.start(0, startOffset);
+  startTime = audioCtx.currentTime - startOffset;
+  isPlaying = true;
+  playPauseBtn.textContent = 'Pause';
+
+  bufferSource.onended = () => {
+    if (isPlaying) {
+      // looping, ignore
+    }
+  };
 }
 
 // ── Track list ────────────────────────────────────────────────────────────────
@@ -236,57 +282,36 @@ async function loadTracks() {
 trackSelect.addEventListener('change', () => {
   const src = trackSelect.value;
   if (!src) return;
-  setupAudio();
-  if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
-  audio.src = src;
-  audio.play()
-    .then(() => {
-      isPlaying = true;
-      playPauseBtn.textContent = 'Pause';
-    })
-    .catch((e) => {
-      console.error('Play failed:', e);
-    });
+  loadAndPlay(src);
 });
 
 playPauseBtn.addEventListener('click', () => {
-  setupAudio();
-  // On mobile, AudioContext starts suspended — must resume on user gesture
-  if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume();
+  // If no track loaded, auto-select demo
+  if (!audioBuffer && trackSelect.value) {
+    loadAndPlay(trackSelect.value);
+    return;
   }
-
-  // If no track selected yet, auto-select demo
-  if (!audio.src && trackSelect.value) {
-    audio.src = trackSelect.value;
-  }
-  if (!audio.src) return;
+  if (!audioBuffer) return;
 
   if (isPlaying) {
-    audio.pause();
+    // Pause: remember position
+    startOffset = audioCtx.currentTime - startTime;
+    if (bufferSource) {
+      bufferSource.stop();
+      bufferSource = null;
+    }
     isPlaying = false;
     playPauseBtn.textContent = 'Play';
   } else {
-    audio.play()
-      .then(() => {
-        isPlaying = true;
-        playPauseBtn.textContent = 'Pause';
-      })
-      .catch((e) => {
-        console.error('Play failed:', e);
-      });
+    // Resume from offset
+    setupAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    playBuffer();
   }
 });
 
 volumeSlider.addEventListener('input', () => {
   if (gainNode) gainNode.gain.value = parseFloat(volumeSlider.value);
-});
-
-audio.addEventListener('ended', () => {
-  isPlaying = false;
-  playPauseBtn.textContent = 'Play';
 });
 
 // ── Drag & Drop support (for static hosting without /api/tracks) ─────────────
@@ -309,18 +334,13 @@ document.addEventListener('drop', (e) => {
   const file = e.dataTransfer.files[0];
   if (!file || !file.type.startsWith('audio/')) return;
   const url = URL.createObjectURL(file);
-  setupAudio();
-  audio.src = url;
-  audio.play().then(() => {
-    isPlaying = true;
-    playPauseBtn.textContent = 'Pause';
-    // Add to track list
-    const opt = document.createElement('option');
-    opt.value = url;
-    opt.textContent = file.name;
-    opt.selected = true;
-    trackSelect.appendChild(opt);
-  }).catch(() => {});
+  // Add to track list
+  const opt = document.createElement('option');
+  opt.value = url;
+  opt.textContent = file.name;
+  opt.selected = true;
+  trackSelect.appendChild(opt);
+  loadAndPlay(url);
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -334,7 +354,5 @@ setTimeout(() => {
     hint.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:#666;font:1em sans-serif;z-index:100;';
     hint.textContent = 'Drag & drop an audio file to start';
     document.body.appendChild(hint);
-    // Remove hint once audio plays
-    audio.addEventListener('play', () => hint.remove(), { once: true });
   }
 }, 2000);
