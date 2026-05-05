@@ -266,6 +266,52 @@ audio.addEventListener('ended', () => {
   playPauseBtn.textContent = 'Play';
 });
 
+// ── Drag & Drop support (for static hosting without /api/tracks) ─────────────
+const dropOverlay = document.createElement('div');
+dropOverlay.id = 'drop-overlay';
+dropOverlay.innerHTML = '<p>Drop audio file here</p>';
+dropOverlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:999;justify-content:center;align-items:center;font:2em sans-serif;color:#0f0;';
+document.body.appendChild(dropOverlay);
+
+document.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropOverlay.style.display = 'flex';
+});
+dropOverlay.addEventListener('dragleave', () => {
+  dropOverlay.style.display = 'none';
+});
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropOverlay.style.display = 'none';
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith('audio/')) return;
+  const url = URL.createObjectURL(file);
+  setupAudio();
+  audio.src = url;
+  audio.play().then(() => {
+    isPlaying = true;
+    playPauseBtn.textContent = 'Pause';
+    // Add to track list
+    const opt = document.createElement('option');
+    opt.value = url;
+    opt.textContent = file.name;
+    opt.selected = true;
+    trackSelect.appendChild(opt);
+  }).catch(() => {});
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadTracks();
 showControls();
+
+// Show hint if no tracks available
+setTimeout(() => {
+  if (trackSelect.options.length <= 1) {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:#666;font:1em sans-serif;z-index:100;';
+    hint.textContent = 'Drag & drop an audio file to start';
+    document.body.appendChild(hint);
+    // Remove hint once audio plays
+    audio.addEventListener('play', () => hint.remove(), { once: true });
+  }
+}, 2000);
