@@ -11,7 +11,7 @@ const {
 const FFT_SIZE = 2048;
 const NUM_BARS = 128;
 const BAR_FALLOFF_RATE = 2.5;   // amplitude units/second for peak decay
-const CONTROLS_HIDE_DELAY = 3000;
+const CONTROLS_HIDE_DELAY = 8000;
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
 const canvas       = document.getElementById('canvas');
@@ -54,6 +54,7 @@ function showControls() {
 
 document.addEventListener('mousemove', showControls);
 document.addEventListener('click', showControls);
+document.addEventListener('touchstart', showControls);
 
 // ── Canvas / waterfall sizing ─────────────────────────────────────────────────
 function resizeCanvas() {
@@ -236,18 +237,32 @@ trackSelect.addEventListener('change', () => {
   const src = trackSelect.value;
   if (!src) return;
   setupAudio();
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
   audio.src = src;
   audio.play()
     .then(() => {
       isPlaying = true;
       playPauseBtn.textContent = 'Pause';
     })
-    .catch(() => {});
+    .catch((e) => {
+      console.error('Play failed:', e);
+    });
 });
 
 playPauseBtn.addEventListener('click', () => {
-  if (!audio.src) return;
   setupAudio();
+  // On mobile, AudioContext starts suspended — must resume on user gesture
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  // If no track selected yet, auto-select demo
+  if (!audio.src && trackSelect.value) {
+    audio.src = trackSelect.value;
+  }
+  if (!audio.src) return;
 
   if (isPlaying) {
     audio.pause();
@@ -259,7 +274,9 @@ playPauseBtn.addEventListener('click', () => {
         isPlaying = true;
         playPauseBtn.textContent = 'Pause';
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.error('Play failed:', e);
+      });
   }
 });
 
