@@ -1,0 +1,84 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: #0a0a0a;
+  overflow: hidden;
+}
+
+#canvas {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#controls {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 14px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
+  opacity: 1;
+  transition: opacity 0.6s ease;
+  z-index: 10;
+  min-width: 160px;
+}
+
+#controls.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#controls select,
+#controls button {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: system-ui, sans-serif;
+  cursor: pointer;
+  outline: none;
+  width: 100%;
+}
+
+#controls select:hover,
+#controls button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+#controls select option {
+  background: #1a1a1a;
+  color: #ddd;
+}
+
+#vol-label {
+  color: #888;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+#volume {
+  width: 100%;
+  height: 4px;
+  accent-color: #0af;
+  cursor: pointer;
+}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Visualizer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="controls">
+    <select id="track-select">
+      <option value="">-- Select Track --</option>
+    </select>
+    <button id="play-pause">Play</button>
+    <label id="vol-label">
+      Volume
+      <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8">
+    </label>
+  </div>
+
+  <!-- crossorigin="anonymous" required for Web Audio API to access the element -->
+  <audio id="audio" crossorigin="anonymous"></audio>
+
+  <script src="utils.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

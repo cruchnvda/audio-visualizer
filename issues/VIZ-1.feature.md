@@ -86,3 +86,43 @@ A single-page web app that plays a local audio file and renders a real-time FFT 
 ### Fullscreen API
 - **Status:** DEFERRED
 - **Risk:** Low. Nice to have, easy to add later. Double-click to toggle would be intuitive.
+
+## Implementation Plan
+
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `index.html` | Main page: canvas, controls overlay, audio element |
+| `style.css` | Dark theme, full-viewport layout, controls fade |
+| `utils.js` | Pure functions (color math, log-scale freq mapping, amplitude) — UMD-compatible so Node.js can require them for tests |
+| `app.js` | Browser wiring: Web Audio API, animation loop, adaptive quality, event handlers |
+| `serve.py` | Python http.server + `/api/tracks` JSON endpoint |
+| `audio/.gitkeep` | Placeholder directory for audio files |
+| `test_serve.py` | Python unittest for `list_tracks()` and `/api/tracks` |
+| `tests/test_utils.js` | Node.js tests for pure JS utility functions |
+| `Makefile` | `make test` runs both test suites; `make serve` starts server |
+
+### Architecture
+
+**Canvas layout**: Single `<canvas>` fills the full viewport. Drawing is split by Y coordinate: top 40% = FFT bars, bottom 60% = waterfall. Both panels share the same logarithmic frequency axis.
+
+**Waterfall scrolling**: An offscreen canvas accumulates history. Each frame, `drawImage` copies it onto itself shifted down 1px (browser-defined safe per spec), then a 1px ImageData row is stamped at the top. The whole thing is then blitted onto the main canvas below the bar panel.
+
+**Log-scale frequency mapping**: `buildFreqBinMap(numBars, fftSize, sampleRate)` produces `numBars+1` bin-index boundaries. Bar `i` averages `freqData[map[i]..map[i+1])`. Frequency range: 20 Hz → Nyquist.
+
+**Smooth bar falloff**: `peaks[]` array tracks each bar's running maximum. On each frame, if the live amplitude exceeds the peak it snaps up; otherwise it decays by `BAR_FALLOFF / h` per frame (constant velocity in normalized space).
+
+**Adaptive quality**: A rolling 60-frame average of `requestAnimationFrame` deltas drives `barCount` up or down (min 32, max 128), keeping frame time in the 12–20 ms sweet spot. Changing `barCount` invalidates `freqBinMap`.
+
+**Controls auto-hide**: CSS `opacity` transition on a `.hidden` class. `mousemove`/`click` reset a 3-second `setTimeout`.
+
+**Audio setup on demand**: `AudioContext` is created on first user interaction (track select or play), respecting browser autoplay policy. `MediaElementSource` → `AnalyserNode` → `GainNode` → `destination`.
+
+**Testability**: Pure functions live in `utils.js` behind a UMD wrapper so `node tests/test_utils.js` can `require('./utils')`. Browser loads it as a plain `<script>`.
+
+### Ordering Constraints
+
+1. `utils.js` must be defined before `app.js` in `index.html`.
+2. `serve.py` must be running for `/api/tracks` to resolve; app degrades gracefully if the fetch fails.
+3. Tests are independent of each other; `make test` runs both suites in sequence.
