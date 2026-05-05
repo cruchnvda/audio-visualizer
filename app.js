@@ -211,17 +211,23 @@ function setupAudio() {
 
 // ── Track list ────────────────────────────────────────────────────────────────
 async function loadTracks() {
+  let tracks = [];
   try {
-    const res    = await fetch('/api/tracks');
-    const tracks = await res.json();
-    for (const t of tracks) {
-      const opt       = document.createElement('option');
-      opt.value       = `audio/${t}`;
-      opt.textContent = t;
-      trackSelect.appendChild(opt);
-    }
+    const res = await fetch('/api/tracks');
+    tracks = await res.json();
   } catch {
-    // Server may not be running; silently degrade
+    // Server may not be running; fall back to bundled demo
+    tracks = ['demo.wav'];
+  }
+  for (const t of tracks) {
+    const opt       = document.createElement('option');
+    opt.value       = `audio/${t}`;
+    opt.textContent = t;
+    trackSelect.appendChild(opt);
+  }
+  // Auto-select first track if available
+  if (tracks.length > 0) {
+    trackSelect.selectedIndex = 1;
   }
 }
 
